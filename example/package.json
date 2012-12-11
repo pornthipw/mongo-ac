@@ -1,0 +1,22 @@
+{
+    "author": "Pornthip Mensin", 
+    "name": "mongo-ac",
+    "description": "Authorization module for Node.js.", 
+    "version": "0.1.0", 
+    "repository": {
+      "type": "git", 
+      "url": "git://github.com/pornthipw/mongo-ac.git"
+    }, 
+    "keywords": ["authorization"],
+    "main": "index", 
+    "engines": {
+      "node": ">= 0.6.2"
+    }, 
+    "dependencies": {           
+      "express": "*",
+      "mongodb" : "*",
+      "passport" : "*",
+      "passport-openid" : "*",
+      "ejs": ">= 0.0.0"
+    }
+}
