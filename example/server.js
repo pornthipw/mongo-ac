@@ -1,15 +1,18 @@
 var express = require("express");
-var mongoac = require("mongo-ac");
+var mongoac = require("../index");
 var passport = require('passport');
+var config = require('./config');
 var app = express();
 
 var OpenIDStrategy = require('passport-openid').Strategy;
 
+
+
 var access_control = new mongoac.MongoAC({
-	host:'10.10.20.75', 
-	port:27017,
-	db:'projectplan',
-	collection_name:'nook_ac_1'
+  host:config.authorization.mongodb.server, 
+  port:config.authorization.mongodb.port,
+  db:config.authorization.mongodb.db,
+  collection_name:config.authorization.mongodb.collection
 });
 
 
@@ -60,13 +63,13 @@ passport.deserializeUser(function(identifier, done) {
 });
 
 passport.use(new OpenIDStrategy({
-    returnURL: 'http://localhost:3000/auth/openid/return',
-    realm: 'http://localhost:3000',
+    returnURL: config.site.baseUrl+'auth/openid/return',
+    realm: config.site.baseUrl,
     profile: true
   },
   function(identifier, profile, done) {
     process.nextTick(function () {
-    	//console.log(profile);
+      //console.log(profile);
       return done(null, { identifier: identifier, profile:profile })
     });
   }
@@ -76,68 +79,62 @@ passport.use(new OpenIDStrategy({
 app.post('/auth/openid', 
   passport.authenticate('openid', { failureRedirect: '/login' }),
   function(req, res) {
-    res.redirect('http://localhost:3000');
+    res.redirect(config.site.baseUrl);
   });
   
 app.get('/auth/openid/return', 
   passport.authenticate('openid', { failureRedirect: '/login' }),
   function(req, res) {
-    res.redirect('http://localhost:3000');
+    res.redirect(config.site.baseUrl);
 });
 
 
 app.get('/login', function(req, res){
-console.log('rendering');
-//res.json({'test':'ok'});
-  res.send('<form action="/auth/openid" method="post">'+
-	'<div>'+
-	'<label>OpenID:</label>'+
-	'<input type="text" name="openid_identifier"/><br/>'+
-	'</div>'+
-	'<div>'+
-	'<input type="submit" value="Submit"/>'+
-	'</div>'+
-	'</form>');
+  res.send('<form action="'+
+        config.site.baseUrl+
+        'auth/openid" method="post">'+
+  '<div>'+
+  '<label>OpenID:</label>'+
+  '<input type="text" name="openid_identifier"/><br/>'+
+  '</div>'+
+  '<div>'+
+  '<input type="submit" value="Submit"/>'+
+  '</div>'+
+  '</form>');
 });
 
-
-app.get('/allow/access', function(req, res){
-console.log('rendering');
-//res.json({'test':'ok'});
-  res.send('<form action="/allow/access" method="post">'+
-	'<div>'+
-	'<label>OpenID:</label>'+
-	'<input type="text" name="user"/><br/>'+
-	'<input type="text" name="url"/><br/>'+
-	'<input type="text" name="method"/><br/>'+
-	'</div>'+
-	'<div>'+
-	'<input type="submit" value="Submit"/>'+
-	'</div>'+
-	'</form>');
-});
-
-app.post('/allow/access', function(req, res) {
-	console.log('POST allow/access');
-	access_control.allow(req.body.user,req.body.url,req.body.method, function(user) {
-		res.json({'test':'ok'});
-	});	
+app.get('/allow/access', function(req, res) {
+  access_control.allow(req.body.user,req.body.url,req.body.method, function(user) {
+    res.json({'test':'ok'});
+  });  
 });
 
 app.get('/notallow/access', function(req, res) {
-	access_control.allow(req.query.user,req.query.url,req.query.method, function(user) {
-		res.json({'test':'ok'});
-	});	
-});
-
-
-app.get('/protect', function(req, res) {
-	access_control.protect(req.query.url, req.query.method);
+  access_control.allow(req.query.user,req.query.url,req.query.method, function(user) {
+    res.json({'test':'ok'});
+  });  
 });
 
 app.get('/users', function(req, res) {
-	var users = access_control.getUsers();
-	
+  access_control.users(function(users) {
+    res.json(users);
+  });
+});
+
+app.get('/users/:user', function(req, res) {
+  console.log('get user <'+req.params.user+'>');
+  access_control.get_user(req.params.user, function(user) {
+    res.json(user);
+  });
+});
+
+app.get('/protect', function(req, res) {
+  access_control.protect(req.query.url, req.query.method);
+});
+
+app.get('/users', function(req, res) {
+  var users = access_control.getUsers();
+  
 });
 
 app.get('/', function(req, res) {
@@ -147,6 +144,6 @@ app.get('/', function(req, res) {
 });
 
 
-app.listen(3000);
+app.listen(config.site.port);
 
-console.log("Mongo Express server listening on port " + 3000);
+console.log("Mongo Express server listening on port " + config.site.port);
