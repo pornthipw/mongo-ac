@@ -3,54 +3,89 @@ var crypto  = require('crypto');
 var events  = require('events');
 var mongodb = require('mongodb');
 var BSON = require('mongodb').pure().BSON;
-
-var db_config = {
-  safe:false,'auto_reconnect':true,poolSize: 4
-};
+var generic_pool = require('generic-pool');
 
 var MongoAC = function(config) {
   events.EventEmitter.call(this);
   self = this;
+  
+  var pool = generic_pool.Pool({
+    name: 'mongodb',
+    max: 2,
+    create: function(callback) {
+      var db = new mongodb.Db(config.db, 
+        new mongodb.Server(config.host, config.port),
+        {safe:false, auto_reconnect:true,poolSize:4
+      });      
+      db.open(function(err,db) {
+        console.log('Open DB');
+        if(err) {
+          console.log(err);
+        }
+        callback(err,db);
+      });
+    },
+    destroy: function(db) {
+      db.close();
+    }
+  });
+
+  this.native_handlers = function(req, res, callback) {
+    var url_user = /^\/mongo-ac\/users$/;
+
+    if(url_user.test(req.url)) {
+      self.users(function(users) {
+        callback(false);
+        res.json(users);
+      });
+    } else {
+      callback(true);
+    }
+  };
   
   this.guard = function() {    
     var secureFn = function(req, res, next) {
       var url = req.url;
       var idx = req.url.indexOf('?'); 
       if(idx > -1) {
-      url = url.slice(0,idx);      
+        url = url.slice(0,idx);      
       } 
       var hash = crypto.createHash('md5').update(url + req.method).digest('hex');
       var spec = {'_id': hash};
       console.log(url + ' <'+req.method+'>');
       console.log(hash);
-      var db = new mongodb.Db(config.db, new mongodb.Server(config.host, config.port), db_config);      
-      db.open(function(err, db) {
+      pool.acquire(function(err,db) {
         db.collection(config.collection_name, function(err, collection) {
-           collection.findOne(spec, function(err, doc) {
+          collection.findOne(spec, function(err, doc) {
             if(doc) {
               if(typeof req.user !== "undefined") {
-                console.log('User -> 1' );                
                 collection.findOne({"username":req.user.identifier.profile.emails[0].value}, function(err, doc) {
+                  pool.release(db);
                   if(!doc) {
-                    db.close();                
                     next(new Error(401));
                   } else {
                     if(doc.allow.indexOf(hash) !== -1) {
-                      db.close();
-                      next();
+                      self.native_handlers(req,res,function(handle) {
+                        if(!handle) {
+                          next();
+                        }
+                      });
                     } else {
-                      db.close();
                       next(new Error(401));
                     }
                   }
                 });                
               } else {                          
-                db.close();                
+                pool.release(db);
                 next(new Error(401));
               }
             } else {
-              db.close();                                                    
-              next();   
+              pool.release(db);
+              self.native_handlers(req,res,function(handle) {
+                if(!handle) {
+                  next();
+                }
+              });
             }                     
           });
         });        
@@ -63,19 +98,17 @@ var MongoAC = function(config) {
     var hash = crypto.createHash('md5').update(url + method).digest('hex');
     console.log("Protecting url: " + url);
     var spec = {'_id': hash,'method':method, 'url':url};
-    var db = new mongodb.Db(config.db, new mongodb.Server(config.host, config.port), db_config);      
-    db.open(function(err, db) {      
+    pool.acquire(function(err,db) {
       db.collection(config.collection_name, function(err, collection) {
         collection.findOne(spec, function(err, doc) {
+           pool.release(db);
            if(!doc) {
              collection.insert(spec, function(err, result) {               
-               db.close();              
                if(callback) {                        
                  callback(hash);
                }
              });                             
            } else {             
-             db.close();
              if(callback) {
                callback(hash);
              }
@@ -89,12 +122,11 @@ var MongoAC = function(config) {
     var hash = crypto.createHash('md5').update(url + method).digest('hex');
     console.log("Releasing url: " + url);
     var spec = {'_id': hash,'method':method, 'url':url};
-    var db = new mongodb.Db(config.db, new mongodb.Server(config.host, config.port), db_config);      
-    db.open(function(err, db) {      
+    pool.acquire(function(err,db) {
       db.collection(config.collection_name, function(err, collection) {
         collection.remove(spec, function(err, doc) {             
-           db.close();
            if(callback) {
+             pool.release(db);
              callback(hash);
            }               
          });
@@ -105,15 +137,14 @@ var MongoAC = function(config) {
   this.allow = function(user, url, method, callback) {
     spec = {'username':user};
     var hash = crypto.createHash('md5').update(url + method).digest('hex');
-    var db = new mongodb.Db(config.db, new mongodb.Server(config.host, config.port), db_config);      
-    db.open(function(err, db) {
+    pool.acquire(function(err,db) {
       db.collection(config.collection_name, function(err, collection) {
         collection.findOne(spec, function(err, doc) {
            if(!doc) {
              spec['allow'] = [hash];
              collection.insert(spec, function(err, result) {               
-               db.close();              
                if(callback) {                        
+                 pool.release(db);
                  callback(user);
                }
              });                             
@@ -122,11 +153,13 @@ var MongoAC = function(config) {
                doc.allow.push(hash);
                collection.save(doc, function(err, result) {
                  if(callback) {
+                   pool.release(db);
                    callback(user);
                  }
                });
              } else {
                if(callback) {
+                 pool.release(db);
                  callback(user);
                }
              }             
@@ -139,44 +172,42 @@ var MongoAC = function(config) {
   this.not_allow = function(user, url, method, callback) {
     spec = {'username':user};
     var hash = crypto.createHash('md5').update(url + method).digest('hex');
-    var db = new mongodb.Db(config.db, new mongodb.Server(config.host, config.port), db_config);  
-    db.open(function(err, db) {
+    pool.acquire(function(err,db) {
       db.collection(config.collection_name, function(err, collection) {
         collection.findOne(spec, function(err, doc) {
           if(doc) {
              var idx = doc.allow.indexOf(hash);
              if(idx != -1) {
                doc.allow.splice(idx,1);
-               //console.log(doc.allow);
                collection.save(doc, function(err, result) {               
-                 db.close();              
+                 pool.release(db);
                  callback(user);
                });
              } else {
-               db.close();  
+               pool.release(db);
                callback(user);
              }
            } else {
-             db.close();  
+             pool.release(db);
              callback(user);
-           }                                                                              
+           }                                                      
         });
       });
     });  
   };
   
   this.get_user = function(username,callback) {
-    var db = new mongodb.Db(config.db, new mongodb.Server(config.host, config.port), db_config);  
-    db.open(function(err, db) {
+    pool.acquire(function(err,db) {
       db.collection(config.collection_name, function(err, collection) {
         collection.findOne({'username':username}, function(err, user) {
           if(user) {
             collection.find({'_id':{'$in':user.allow}}).toArray(function(err, docs) {
-              db.close();
+ 
+              pool.release(db);
               callback(docs);
             });
           } else {
-            db.close();
+            pool.release(db);
             callback(null);
           }
         });
@@ -186,11 +217,10 @@ var MongoAC = function(config) {
   
       
   this.users = function(callback) {
-    var db = new mongodb.Db(config.db, new mongodb.Server(config.host, config.port), db_config);  
-    db.open(function(err, db) {
+    pool.acquire(function(err,db) {
       db.collection(config.collection_name, function(err, collection) {
         collection.find({'username':{'$exists':true}}).toArray(function(err, users) {
-          db.close();
+          pool.release(db);
           callback(users);
         });
       });
