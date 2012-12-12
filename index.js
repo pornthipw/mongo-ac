@@ -35,11 +35,11 @@ var MongoAC = function(config) {
 
     if(url_user.test(req.url)) {
       self.users(function(users) {
-        callback(false);
+        callback(true);
         res.json(users);
       });
     } else {
-      callback(true);
+      callback(false);
     }
   };
   
