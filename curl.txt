@@ -1,0 +1,8 @@
+
+curl -v -H "Content-Type: application/json" -X POST -d '{"user":"kphongph@gmail.com","url":"/", "method":"GET"}' http://10.39.101.72:8088/mongo-ac/allow
+
+curl -v -H "Content-Type: application/json" -X POST -d '{"user":"kphongph@gmail.com","url":"/", "method":"GET"}' http://10.39.101.72:8088/mongo-ac/notallow
+
+curl -v -H "Content-Type: application/json" -X POST -d '{"url":"/", "method":"GET"}' http://10.39.101.72:8088/mongo-ac/protect
+
+curl -v -H "Content-Type: application/json" -X POST -d '{"url":"/", "method":"GET"}' http://10.39.101.72:8088/mongo-ac/release

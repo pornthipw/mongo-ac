@@ -32,14 +32,56 @@ var MongoAC = function(config) {
 
   this.native_handlers = function(req, res, callback) {
     var url_user = /^\/mongo-ac\/users$/;
+    var url_allow = /^\/mongo-ac\/allow$/; // {'user':'kphongph@gmail.com', 'url':'/login', 'method':'GET'}
+    var url_notallow = /^\/mongo-ac\/notallow$/; // {'user':'kphongph@gmail.com', 'url':'xxxx', 'method':'GET'}
+    var url_protect = /^\/mongo-ac\/protect$/; // {'url':'/', 'method':'GET'}
+    var url_release = /^\/mongo-ac\/release$/; // {'url':'/'}
+    
+    // var url_release= /^\/mongo-ac\/notallow$/; // {'user':'kphongph@gmail.com', 'url':'xxxx', 'method':'GET'}
 
     if(url_user.test(req.url)) {
       self.users(function(users) {
         callback(true);
         res.json(users);
       });
-    } else {
-      callback(false);
+    } else { 
+      if(url_allow.test(req.url)) {                
+        var obj =req.body;
+        console.log(req.body);        
+        self.allow(obj.user, obj.url, obj.method, function(user) {
+          callback(true);
+          res.json({'ok':'1'});
+        });        
+      } else {
+      	if(url_notallow.test(req.url)) {                
+        		var obj =req.body;
+        		console.log(req.body);        
+        		self.not_allow(obj.user, obj.url, obj.method, function(user) {
+          		callback(true);
+          		res.json({'ok':'1'});
+        		});        
+      	} else {
+      		if(url_protect.test(req.url)) {                
+        			var obj =req.body;
+        			console.log(req.body); 
+        			self.protect(obj.url, obj.method, function(){
+        				callback(true);
+          			res.json({'ok':'1'});
+        			}); 
+      		} else {
+      			if(url_release.test(req.url)) {                
+        				var obj =req.body;
+        				console.log(req.body); 
+        				self.release(obj.url,obj.method, function(){
+        					callback(true);
+          				res.json({'ok':'1'});
+        				});
+      			} else {
+        				callback(false);
+        			}
+        		}
+        	}
+      }
     }
   };
   

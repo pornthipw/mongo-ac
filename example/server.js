@@ -6,8 +6,6 @@ var app = express();
 
 var OpenIDStrategy = require('passport-openid').Strategy;
 
-
-
 var access_control = new mongoac.MongoAC({
   host:config.authorization.mongodb.server, 
   port:config.authorization.mongodb.port,
@@ -27,7 +25,6 @@ app.configure(function() {
     
   app.use(express.static(__dirname + '/public'));    
   
-  
   app.use(express.session({ secret: 'keyboard cat' }));
   
   app.use(passport.initialize());
@@ -46,13 +43,11 @@ app.use(function(err,req,res,next) {
     }
 });
 
-
-access_control.protect('/allow/access', 'POST');
-access_control.protect('/notallow/access', 'GET');
-access_control.protect('/protect', 'POST');
-access_control.protect('/', 'GET');
-
-access_control.allow('pornthip.wong@gmail.com','/allow/access','POST');
+//access_control.protect('/allow/access', 'POST');
+//access_control.protect('/notallow/access', 'GET');
+//access_control.protect('/protect', 'POST');
+//access_control.protect('/', 'GET');
+//access_control.allow('pornthip.wong@gmail.com','/allow/access','POST');
 
 passport.serializeUser(function(user, done) {
   done(null, user);
@@ -75,7 +70,6 @@ passport.use(new OpenIDStrategy({
   }
 ));
 
-
 app.post('/auth/openid', 
   passport.authenticate('openid', { failureRedirect: '/login' }),
   function(req, res) {
@@ -87,7 +81,6 @@ app.get('/auth/openid/return',
   function(req, res) {
     res.redirect(config.site.baseUrl);
 });
-
 
 app.get('/login', function(req, res){
   res.send('<form action="'+
@@ -103,6 +96,7 @@ app.get('/login', function(req, res){
   '</form>');
 });
 
+/*
 app.get('/allow/access', function(req, res) {
   access_control.allow(req.body.user,req.body.url,req.body.method, function(user) {
     res.json({'test':'ok'});
@@ -113,12 +107,6 @@ app.get('/notallow/access', function(req, res) {
   access_control.allow(req.query.user,req.query.url,req.query.method, function(user) {
     res.json({'test':'ok'});
   });  
-});
-
-app.get('/users', function(req, res) {
-  access_control.users(function(users) {
-    res.json(users);
-  });
 });
 
 app.get('/users/:user', function(req, res) {
@@ -136,13 +124,18 @@ app.get('/users', function(req, res) {
   var users = access_control.getUsers();
   
 });
+*/
+
+app.get('/mongo-ac/allow', function(req, res) {
+  
+});
+
 
 app.get('/', function(req, res) {
   console.log('User ');
   //console.log(req.user.identifier.profile.emails[0].value);
   res.json({'test':'ok'});
 });
-
 
 app.listen(config.site.port);
 
